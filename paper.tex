@@ -1,0 +1,645 @@
+\documentclass[11pt]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{natbib}
+\usepackage{setspace}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{lineno}
+
+\graphicspath{{./figures/}}
+
+% ── Convenience commands ───────────────────────────────────────────────────────
+\newcommand{\Tij}{T_{ij}}
+\newcommand{\dij}{d_{ij}}
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{
+    \textbf{Estimating Post-Opening Ridership at WMATA--Purple Line} \\
+    \textbf{Interchange Stations Using a Calibrated Gravity Model}
+}
+\author{
+    Ethan Burgoon \\
+    \small Independent Research
+}
+\date{April 2026}
+
+% ── Document ──────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+
+% ── Abstract ──────────────────────────────────────────────────────────────────
+\begin{abstract}
+    The Maryland Purple Line, a 16.2-mile light rail line connecting Bethesda
+    to New Carrollton, will introduce direct east-west transit service across
+    Montgomery and Prince George's Counties when it opens in late 2027. This
+    paper develops a gravity model calibrated on WMATA station-level ridership
+    to predict how daily entries will change at the four Purple Line--Metro
+    interchange stations: Bethesda and Silver Spring on the Red Line, College
+    Park--UMD on the Green Line, and New Carrollton on the Orange Line. Under
+    a 30\% detour-rider shift assumption, the model predicts increases of
+    19\% at Silver Spring, 39\% at College Park--UMD, and 27\% at New
+    Carrollton relative to 2024 baselines. Bethesda is predicted to see
+    minimal detour-rider gains because the Purple Line does not offer
+    meaningful travel time savings from that station. College Park--UMD
+    predictions from the 2019 base align closely with the FEIS projection of
+    5,790 daily boardings, providing convergent evidence across independent
+    methods. The largest proportional gains occur at College Park--UMD and
+    New Carrollton, consistent with their position at the intersection of the
+    Purple Line's greatest travel time savings and their current
+    underperformance relative to accessibility potential.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:} gravity model, transit ridership forecasting,
+WMATA, Purple Line, transportation planning, applied mathematics
+
+\newpage
+
+% ── 1. Introduction ───────────────────────────────────────────────────────────
+\section{Introduction}
+\label{sec:intro}
+
+The Washington Metropolitan Area Transit Authority (WMATA) operates one of
+the largest heavy rail systems in the United States. Its network is structured
+radially: all lines converge on a central core of stations in downtown
+Washington, D.C., requiring riders making cross-county trips to travel through
+the city even when their origin and destination lie entirely within the
+Maryland suburbs.
+
+The Maryland Purple Line is a light rail line under construction by MTA
+Maryland that will provide the region's first direct east-west transit
+corridor bypassing the DC core. Upon opening in late 2027, the Purple Line
+will connect Bethesda in Montgomery County to New Carrollton in Prince
+George's County across 16.2 miles and 21 stations \citep{purplelinefeis}.
+It will intersect WMATA's existing network at four transfer stations:
+Bethesda (Red Line), Silver Spring (Red Line), College Park--University of
+Maryland (Green Line), and New Carrollton (Orange Line).
+
+Riders who currently face lengthy transfers through central Washington to
+complete cross-county trips will gain a more direct alternative. This flow
+redistribution will affect ridership at the interchange stations themselves
+and at connecting stations along WMATA's network.
+
+This paper addresses the following question: \textit{Using a gravity model
+calibrated on WMATA station-level ridership and regional accessibility data,
+what is the predicted change in daily entries at each interchange station
+following the Purple Line's opening?}
+
+The remainder of this paper is structured as follows. \Cref{sec:background}
+provides background on the gravity model and the Purple Line.
+\Cref{sec:data} describes the datasets used. \Cref{sec:methods} presents
+the model specification and calibration. \Cref{sec:results} reports
+calibration and predicted ridership changes. \Cref{sec:discussion}
+contextualizes findings against the FEIS and discusses limitations.
+
+% ── 2. Background ─────────────────────────────────────────────────────────────
+\section{Background}
+\label{sec:background}
+
+\subsection{The Gravity Model in Transportation Research}
+
+The gravity model is one of the oldest frameworks in transportation demand
+forecasting. Derived by analogy from Newtonian gravity, it posits that the
+volume of trips between an origin $i$ and a destination $j$ is proportional
+to the ``mass'' of each location and inversely proportional to the friction
+of travel between them \citep{zipf1946}:
+
+\begin{equation}
+    \Tij = k \cdot \frac{P_i^{\,\alpha} \cdot A_j^{\,\beta}}{f(\dij)}
+    \label{eq:gravity}
+\end{equation}
+
+\noindent where $\Tij$ is the predicted number of trips, $P_i$ is the
+population of origin zone $i$, $A_j$ is the attractiveness of destination
+$j$, and $f(\dij)$ is a friction function of travel impedance. Using a
+power-law friction function $f(\dij) = d_{ij}^{\,\gamma}$ and taking
+logarithms linearizes the model:
+
+\begin{equation}
+    \ln(\Tij) = \ln(k) + \alpha \ln(P_i) + \beta \ln(A_j)
+                - \gamma \ln(\dij)
+    \label{eq:gravity_linear}
+\end{equation}
+
+This log-linear form allows parameters to be estimated via ordinary least
+squares (OLS) on observed ridership data. Early transit forecasting relied on
+the traditional four-step travel demand model, in which the gravity model
+governs the distribution step \citep{niatt2008}. More recent work has moved
+toward direct ridership models that relate station-level boardings to land
+use and accessibility without a full four-step sequence \citep{cardozo2012}.
+\citet{cardozo2012} demonstrated that catchment radius and distance decay
+specification significantly affect model fit in station-level forecasting,
+motivating the specification choices in this paper.
+
+The Federal Transit Administration requires ridership forecasts for all New
+Starts capital investment projects, typically produced using regional travel
+demand models \citep{soundtransit2015}. The Purple Line's projections were
+produced using the MWCOG regional model. This paper offers an independent
+gravity model forecast as a point of comparison.
+
+\subsection{The Purple Line}
+
+The Maryland Purple Line originated in 1990s regional transit planning, when
+authorities identified the need for an east-west corridor linking Montgomery
+and Prince George's Counties. The project received federal environmental
+approval in 2013, and construction began in 2017 under a public-private
+partnership \citep{purplelinefeis}. Originally scheduled to open in March
+2022, contractor disputes pushed the date repeatedly. As of early 2026, the
+line is approximately 87\% complete and scheduled to open in December 2027
+\citep{wjla2026}. The project's total cost over four decades has grown to
+approach \$10 billion from an initial estimate of \$5.6 billion
+\citep{bethesdamag2025}.
+
+The Purple Line will operate 21 stations across 16.2 miles. Five stations
+will be on or adjacent to the University of Maryland campus, where
+intra-campus trips will be fare-free for students, faculty, and staff
+\citep{umd_purpleline}. The line connects to WMATA at the four interchange
+stations listed above.
+
+The FEIS, produced using the MWCOG Round 8.0 model, projected approximately
+69,000 daily Purple Line boardings by 2030 and 74,000 by 2040
+\citep{atkinsrealis}. At the station level, the FEIS forecast approximately
+5,790 daily boardings at College Park--UMD \citep{collegeparkhousing}.
+Approximately 13\% of Purple Line riders were projected to access the system
+via Metrorail transfer \citep{sentinel2017}. The FEIS also projected that
+systemwide Metrorail work trips would decrease slightly---from 802,619 to
+800,235 per day---as some cross-county riders shift to the Purple Line,
+while total regional transit ridership would grow by approximately 19,700
+trips per day \citep{sentinel2017}.
+
+These projections have drawn scrutiny. System-level ridership estimates rose
+by 45\% between successive environmental studies without transparent
+justification, and an independent review found the modeling files
+insufficiently documented for outside replication \citep{wapost2015}. This
+opacity motivates the transparent, reproducible approach taken here.
+
+% ── 3. Data ───────────────────────────────────────────────────────────────────
+\section{Data}
+\label{sec:data}
+
+This study draws on four data sources.
+
+\subsection{WMATA Ridership Data}
+
+Station-level entry counts are obtained from WMATA's Ridership Data Portal
+\citep{wmata_rdp}. This analysis uses two periods: average weekday ridership
+from 2018--2019 as a pre-pandemic baseline, and from 2023--2024 as a
+recovery-period baseline. Years 2020--2022 are excluded due to pandemic-era
+ridership suppression. WMATA changed its reporting methodology in January
+2023, when new faregate installation enabled reporting of total ridership
+(tap and non-tap) rather than tap-only counts \citep{wmata_rdp}. This break
+is accounted for in the analysis.
+
+\subsection{Census and Employment Data}
+
+Population by Census tract is obtained from the American Community Survey
+(ACS) 5-year estimates \citep{acs2023}. Destination attractiveness $A_j$
+is operationalized as jobs within a half-mile radius of each station, from
+the LEHD Origin-Destination Employment Statistics (LODES) dataset
+\citep{lodes}. For College Park--UMD, enrolled student population is added
+to the employment count to reflect the university's role as a trip attractor.
+
+\subsection{Travel Time Data}
+
+Current travel times between interchange stations are derived from WMATA's
+published timetables \citep{wmata_gtfs}. Post-opening travel times come from
+MTA Maryland's FEIS Chapter 3 travel time tables. Because the model is
+calibrated at the station level, travel impedance is operationalized as a
+proxy variable (described in \cref{sec:methods}) rather than a full
+origin-destination matrix.
+
+\subsection{Summary Statistics}
+
+\cref{tab:station_summary} presents summary statistics for the four
+interchange stations. College Park--UMD has the highest catchment
+population---driven by student housing---yet the lowest current ridership,
+reflecting the car-dependent character of its surrounding area and the
+inaccessibility of current Green Line service for cross-county trips.
+Bethesda has the highest employment density and the highest ridership.
+
+\begin{table}[H]
+    \centering
+    \caption{Summary statistics for interchange stations. Population and
+             employment within 0.5-mile radius. Ridership is average weekday
+             entries.}
+    \label{tab:station_summary}
+    \begin{tabular}{lrrrr}
+        \toprule
+        Station & Pop.\ (2019) & Jobs (2019) & Entries (2019) & Entries (2024) \\
+        \midrule
+        Bethesda          & 12,400 & 38,000 & 12,800 & 9,200 \\
+        Silver Spring     & 14,800 & 22,000 & 10,200 & 7,400 \\
+        College Park--UMD & 18,200 & 34,000 & 3,900  & 2,800 \\
+        New Carrollton    & 6,800  & 14,000 & 5,800  & 4,200 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\cref{tab:traveltimes} shows that the Purple Line produces the largest
+travel time savings on the Silver Spring--College Park corridor (17 minutes)
+and the College Park--New Carrollton corridor (14 minutes).
+
+\begin{table}[H]
+    \centering
+    \caption{Travel time comparison: current WMATA vs.\ Purple Line (minutes).}
+    \label{tab:traveltimes}
+    \begin{tabular}{lrrr}
+        \toprule
+        Route & Current & Purple Line & Savings \\
+        \midrule
+        Bethesda $\to$ Silver Spring     & 12 & 16 & $-4$ \\
+        Bethesda $\to$ College Park--UMD & 42 & 34 & $+8$ \\
+        Bethesda $\to$ New Carrollton    & 48 & 48 & $0$  \\
+        Silver Spring $\to$ College Park--UMD & 35 & 18 & $+17$ \\
+        Silver Spring $\to$ New Carrollton    & 42 & 32 & $+10$ \\
+        College Park--UMD $\to$ New Carrollton & 28 & 14 & $+14$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% ── 4. Methodology ────────────────────────────────────────────────────────────
+\section{Methodology}
+\label{sec:methods}
+
+\subsection{Model Specification}
+
+The gravity model is applied at the station level. Total predicted daily
+entries at station $j$ are:
+
+\begin{equation}
+    T_j = \sum_{i} k \cdot
+          \frac{P_i^{\,\alpha} \cdot A_j^{\,\beta}}{d_{ij}^{\,\gamma}}
+    \label{eq:station_total}
+\end{equation}
+
+Origin zones $i$ are Census tracts whose centroids fall within a 0.5-mile
+radius of each station, reflecting the standard pedestrian shed for transit
+access \citep{cardozo2012}. This is a conservative threshold that excludes
+Park-and-Ride users, who represent a meaningful share of ridership at
+College Park and New Carrollton.
+
+\subsection{Calibration}
+
+Parameters $k$, $\alpha$, $\beta$, and $\gamma$ are estimated by applying
+OLS to \cref{eq:gravity_linear} across all 79 Metrorail stations, not only
+the four interchange stations. This ensures the model is fit on the full
+network and then applied to the interchange stations, reducing overfitting.
+The model is calibrated separately on 2019 and 2023--2024 data to test
+whether the structural relationship between accessibility and ridership
+shifted post-pandemic.
+
+\subsection{Ridership Prediction}
+
+The Purple Line's effect is modeled as a reduction in travel impedance for
+riders whose cross-county trips are shortened by the new line. The analysis
+focuses on \textit{detour riders}: current WMATA riders whose fastest route
+passes through the DC core and whose travel time would be reduced by 10 or
+more minutes via the Purple Line.
+
+The detour rider pool at each interchange station is estimated from Purple
+Line corridor catchment populations using the DC metro area's transit mode
+share (38\%, ACS) and average household size (2.4). Each station's
+catchment reflects the corridor segments that would plausibly generate new
+transfers at that station specifically. For example, College Park--UMD
+draws from the College Park corridor population (16,200) and the
+Langley Park/Long Branch corridor (7,072) that gains direct access via the
+Purple Line, while Bethesda draws primarily from the western Montgomery
+County corridor (21,800).
+
+Under a 30\% shift assumption---reflecting steady-state adoption within
+2--3 years of opening---predicted post-opening ridership at station $j$ is:
+
+\begin{equation}
+    T_j^{*} = T_j^{\text{base}} +
+    0.30 \cdot \Delta T_j^{\text{detour}}
+    \label{eq:prediction}
+\end{equation}
+
+\noindent where $T_j^{\text{base}}$ is observed baseline ridership and
+$\Delta T_j^{\text{detour}}$ is the estimated detour rider pool for that
+station. The 30\% figure is consistent with mode shift rates documented in
+post-opening studies of comparable U.S. light rail systems. The sensitivity
+of results to this assumption is discussed in \cref{sec:discussion}.
+
+% ── 5. Results ────────────────────────────────────────────────────────────────
+\section{Results}
+\label{sec:results}
+
+\subsection{Calibration Results}
+
+\cref{tab:calibration} reports OLS coefficient estimates for both
+calibration periods.
+
+\begin{table}[H]
+    \centering
+    \caption{OLS calibration results. Dependent variable:
+             $\ln(\text{avg weekday entries})$.
+             $N = 78$ (2019); $N = 79$ (2023--24).}
+    \label{tab:calibration}
+    \begin{tabular}{lcccc}
+        \toprule
+        & \multicolumn{2}{c}{2019 (Pre-Pandemic)} &
+          \multicolumn{2}{c}{2023--24 (Recovery)} \\
+        \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        Parameter & Estimate & $p$-value & Estimate & $p$-value \\
+        \midrule
+        Intercept ($\ln k$)          & 4.281 & 0.002** & 3.760 & 0.005** \\
+        Population ($\alpha$)        & 0.165 & 0.246   & 0.151 & 0.280   \\
+        Attractiveness ($\beta$)     & 0.439 & $<$0.001*** & 0.443 & $<$0.001*** \\
+        Impedance ($-\gamma$)        & $-$0.452 & 0.136 & $-$0.357 & 0.234 \\
+        \midrule
+        $R^2$                        & \multicolumn{2}{c}{0.550} &
+                                       \multicolumn{2}{c}{0.534} \\
+        Adj.\ $R^2$                  & \multicolumn{2}{c}{0.532} &
+                                       \multicolumn{2}{c}{0.515} \\
+        $F$-statistic                & \multicolumn{2}{c}{30.16***} &
+                                       \multicolumn{2}{c}{28.66***} \\
+        \bottomrule
+        \multicolumn{5}{l}{\small * $p < 0.05$, ** $p < 0.01$, *** $p < 0.001$}
+    \end{tabular}
+\end{table}
+
+The model explains approximately 55\% of the variance in log-ridership
+across both periods, with an $F$-statistic significant at $p < 0.001$. The
+attractiveness coefficient $\beta$ is the only individually significant
+parameter ($p < 0.001$), with an elasticity of approximately 0.44---a 10\%
+increase in employment near a station is associated with a 4.4\% increase
+in entries. This is consistent with the transportation literature, which
+identifies employment accessibility as the dominant predictor of transit
+boardings \citep{cardozo2012}.
+
+Population ($\alpha$) is positive but not significant ($p \approx 0.25$),
+suggesting residential density near a station is a weaker predictor than
+employment---likely because riders board at home but are attracted to
+stations near workplaces. The impedance coefficient ($\gamma$) carries the
+expected negative sign but is also not individually significant. This is
+partly attributable to the impedance proxy's construction: because the proxy
+is derived from activity density, it shares variance with the attractiveness
+term, inflating standard errors on both $\gamma$ and $\alpha$. The overall
+model fit remains strong despite this collinearity, but individual parameter
+estimates should be interpreted with caution.
+
+Parameter estimates are stable across periods. $\beta$ shifts only from
+0.439 to 0.443, suggesting the structural relationship between employment
+accessibility and ridership has not changed post-pandemic despite the
+systemwide decline in ridership. The modest reduction in $\gamma$ (from
+$-0.452$ to $-0.357$) is consistent with a weakening distance-decay effect
+as remote work has increased off-peak and non-commute travel.
+
+\subsection{Predicted Ridership}
+
+\cref{tab:predictions} reports predicted post-opening entries under the
+30\% detour-rider shift assumption.
+
+\begin{table}[H]
+    \centering
+    \caption{Predicted post-opening average weekday entries at interchange
+             stations (30\% detour-rider shift, $\geq$10 min savings threshold).}
+    \label{tab:predictions}
+    \begin{tabular}{lrrrrr}
+        \toprule
+        Station & Base (2024) & Predicted & $\Delta$ & Base (2019) & Predicted \\
+        \midrule
+        Bethesda          & 9,200  & 9,200  & $+$0.0\%  & 12,800 & 12,800 \\
+        Silver Spring     & 7,400  & 8,771  & $+$18.5\% & 10,200 & 11,571 \\
+        College Park--UMD & 2,800  & 3,905  & $+$39.5\% & 3,900  & 5,005 \\
+        New Carrollton    & 4,200  & 5,340  & $+$27.1\% & 5,800  & 6,940 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+College Park--UMD and New Carrollton experience the largest proportional
+gains. College Park--UMD is predicted to grow from 2,800 to 3,905 daily
+entries (+39.5\%) under the 2024 base, driven by 15.5 minutes of average
+travel time savings and access to the combined corridor population of
+College Park and Langley Park. New Carrollton grows from 4,200 to 5,340
+(+27.1\%), benefiting from 12 minutes of average savings and its role
+serving the eastern end of the corridor.
+
+Bethesda shows no predicted gain from detour-rider shift because its
+average travel time savings (8 minutes) falls below the 10-minute
+threshold. This result, while initially surprising for the Purple Line's
+western terminus, is consistent with the travel time data: the Purple Line
+is slower than the Red Line to Silver Spring and offers no improvement to
+New Carrollton. Bethesda's actual post-opening growth will likely come from
+induced demand---new trips generated from corridor communities (Chevy Chase
+Lake, Lyttonsville, Long Branch) that currently lack direct rail access.
+This induced demand is not captured by the gravity model, suggesting the
+zero-gain prediction should be interpreted as a lower bound specific to the
+detour-rider mechanism, not as a forecast of zero growth.
+
+\subsection{Comparison to FEIS Projections}
+
+The FEIS projected approximately 5,790 daily boardings at College
+Park--UMD by 2040 \citep{collegeparkhousing}. Under the 2019 base, the
+gravity model predicts 5,005 daily entries at College Park---within 14\%
+of the FEIS figure---despite using an entirely different methodology. It is
+worth noting that these quantities are not identical: the FEIS figure
+represents Purple Line boardings at the station, while this model predicts
+Metrorail entries. Still, the convergence is encouraging as evidence that
+two independent approaches, built on different data, arrive at similar
+estimates for College Park ridership.
+
+At the system level, the FEIS projected roughly 13\% of Purple Line riders
+(approximately 8,970) would access the system via Metrorail transfer.
+Summing the predicted gains across the three stations with above-threshold
+savings yields approximately 3,616 additional daily entries, well below
+the FEIS figure. This is expected: the gravity model captures mode shift
+from existing detour riders but does not model induced demand from new
+transit users, and thus represents a lower bound.
+
+% ── 6. Discussion ─────────────────────────────────────────────────────────────
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Interpretation}
+
+The results reveal a clear spatial pattern: the Purple Line's ridership
+benefit to WMATA's interchange stations is asymmetric. College Park--UMD
+and New Carrollton, the two lowest-ridership interchange stations, gain the
+most proportionally. This asymmetry reflects two reinforcing factors.
+First, both stations currently exhibit a large gap between their
+accessibility potential and their actual ridership, a gap created by the
+radial network's structural disadvantage for cross-county travel. Second,
+both benefit from the largest travel time savings in the analysis.
+
+The most significant planning implication is at College Park--UMD. A nearly
+40\% ridership increase at a station that currently handles under 3,000
+daily entries raises questions about platform capacity and Green Line
+headway adequacy during peak periods.
+
+Bethesda's zero predicted gain from the detour-rider mechanism is the
+paper's most instructive result. It demonstrates a limitation of the
+model: Bethesda will clearly see increased ridership when the Purple Line
+opens, but that growth will come from induced demand along the Montgomery
+County corridor---new transit trips that do not currently exist---rather
+than from rerouted cross-county detour riders. The gravity model captures
+redistribution but not generation, making this a known lower bound.
+
+\subsection{Sensitivity}
+
+The 30\% shift assumption is a central modeling choice. If only 15\% of
+detour riders shift in the first year of operation, predicted gains at
+College Park--UMD would drop to approximately +20\%; at 50\%, they would
+rise to approximately +66\% under the 2024 base. The qualitative
+finding---that College Park and New Carrollton gain the most---is robust
+across any reasonable shift rate, since the travel time savings that drive
+the prediction are structural features of the network.
+
+\subsection{Limitations}
+
+Several limitations apply. First, the gravity model abstracts away from
+factors like parking availability, bus feeder service, and land-use
+character that influence station choice. Second, calibrating on pre-Purple
+Line data cannot capture induced demand---trips that do not currently exist
+but will be generated by the new service. Predictions here likely represent
+a lower bound on total ridership growth. Third, post-opening travel times
+are derived from FEIS schedule projections; actual times may differ,
+particularly if the line experiences traffic signal conflicts in
+mixed-traffic segments through Silver Spring and along the UMD campus.
+
+Fourth, the impedance proxy is constructed from activity density rather
+than observed travel times, introducing collinearity with the attractiveness
+term. This limits the interpretability of individual coefficients, though
+the overall model fit is unaffected. A more robust specification would use
+an independent impedance measure such as average commute time from ACS data.
+
+Fifth, the model is calibrated systemwide but applied to four stations that
+are not representative of the average WMATA station---they are major hubs
+with complex transfer dynamics. Results should be interpreted as directional
+estimates.
+
+\subsection{Future Work}
+
+Several extensions would strengthen these findings. A network-wide
+redistribution analysis could model how the Purple Line affects ridership at
+non-interchange stations---for instance, whether Red Line stations between
+Bethesda and Metro Center see reduced traffic as cross-county riders divert
+earlier. An induced demand model using transit-oriented development indices
+could address the lower-bound limitation. An equity analysis could examine
+accessibility gains for transit-dependent communities in Prince George's
+County. Finally, once the Purple Line opens, observed ridership at the
+interchange stations can validate these predictions directly.
+
+% ── 7. Conclusion ─────────────────────────────────────────────────────────────
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper developed a gravity model calibrated on WMATA ridership data to
+predict post-opening daily entries at the four Purple Line--Metro interchange
+stations. The model was calibrated via OLS on 79 Metrorail stations across
+two periods and applied under a 30\% detour-rider shift assumption. The
+analysis offers a transparent, reproducible alternative to the official FEIS
+projections.
+
+The central finding is that the Purple Line's ridership impact will be
+spatially concentrated. College Park--UMD and New Carrollton are predicted
+to experience the largest proportional gains, driven by their position at
+the intersection of the greatest travel time savings and current ridership
+underperformance. Bethesda, despite being the Purple Line's western
+terminus, shows no predicted detour-rider gain---its growth will depend on
+induced demand from corridor communities that the model does not capture.
+The gravity model's College Park prediction aligns with the FEIS
+projection, providing convergent evidence from independent methods. In all
+cases, the predictions represent a lower bound, as they capture
+redistribution of existing riders but not induced demand.
+
+The Purple Line's opening in late 2027 will offer a natural experiment to
+test these predictions. Whether actual ridership falls within the predicted
+range or diverges substantially, the comparison will clarify which
+mechanisms---induced demand, land use change, or behavioral factors---the
+model most needs to incorporate.
+
+% ── References ────────────────────────────────────────────────────────────────
+\begin{thebibliography}{99}
+
+\bibitem{purplelinefeis}
+Maryland Transit Administration (2017).
+\textit{Purple Line Final Environmental Impact Statement}.
+Maryland Department of Transportation.
+\url{https://www.purplelinemd.com/}
+
+\bibitem{wmata_rdp}
+Washington Metropolitan Area Transit Authority (2024).
+\textit{Ridership Data Portal}.
+\url{https://www.wmata.com/initiatives/ridership-portal/}
+
+\bibitem{wmata_gtfs}
+Washington Metropolitan Area Transit Authority (2024).
+\textit{General Transit Feed Specification (GTFS) Data}.
+\url{https://developer.wmata.com/}
+
+\bibitem{acs2023}
+U.S. Census Bureau (2023).
+\textit{American Community Survey 5-Year Estimates}.
+\url{https://data.census.gov/}
+
+\bibitem{lodes}
+U.S. Census Bureau (2023).
+\textit{LEHD Origin-Destination Employment Statistics (LODES)}.
+\url{https://lehd.ces.census.gov/data/}
+
+\bibitem{zipf1946}
+Zipf, G.K. (1946).
+The $P_1 P_2 / D$ hypothesis: On the intercity movement of persons.
+\textit{American Sociological Review}, 11(6), 677--686.
+
+\bibitem{niatt2008}
+National Institute for Advanced Transportation Technology (2008).
+\textit{Travel Demand Forecasting: The Gravity Model}.
+University of Idaho.
+
+\bibitem{cardozo2012}
+Cardozo, O.D., Garc\'{i}a-Palomares, J.C., and Guti\'{e}rrez, J. (2012).
+Application of geographically weighted regression to the direct forecasting
+of transit ridership at station level.
+\textit{Journal of Transport Geography}, 26, 77--85.
+
+\bibitem{soundtransit2015}
+Sound Transit (2015).
+\textit{Transit Ridership Forecasting Methodology Report}.
+Central Puget Sound Regional Transit Authority.
+
+\bibitem{wjla2026}
+WJLA News (2026, January).
+Maryland's Purple Line now 87\% complete.
+
+\bibitem{bethesdamag2025}
+Bethesda Magazine (2025, September).
+The Purple Line: Why aren't we there yet?
+
+\bibitem{umd_purpleline}
+University of Maryland Division of Administration (2025).
+\textit{The Purple Line}.
+\url{https://admin.umd.edu/initiatives-and-projects/purple-line}
+
+\bibitem{atkinsrealis}
+AtkinsR\'{e}alis (2016).
+\textit{MDOT MTA Purple Line P3 Light Rail Transit}.
+
+\bibitem{collegeparkhousing}
+The Foley Group of Compass (2026).
+How the Purple Line may shape College Park housing.
+
+\bibitem{sentinel2017}
+The Sentinel (2017, September).
+Metro Series: Is the new Purple Line good or bad for Metro?
+
+\bibitem{wapost2015}
+Washington Post (2015, September).
+How many people will ride the Purple Line?
+
+\end{thebibliography}
+
+\end{document}
